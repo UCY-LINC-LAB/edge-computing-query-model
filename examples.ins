@@ -1,0 +1,182 @@
+/**
+2b
+**/
+top_10_taxis_most_profit_areas =
+  COMPUTE TOP_K[10] (
+    (
+      SUM (total_amount, 1 MINUTES) BY city
+      /
+      COUNT(taxi_passenger, 1 MINUTES) BY city
+    )
+  )
+  EVERY 1 HOURS
+;
+/**
+2a
+**/
+top_10_taxis_most_profit_areas =
+  COMPUTE TOP_K[10] (
+    (
+      SUM (total_amount, 1 MINUTES) BY city
+      -
+      COUNT(taxi_passenger, 1 MINUTES, 2 SECONDS) BY city
+    )
+  )
+  EVERY 1 HOURS
+;
+/**
+3a
+**/
+city_segment_min_num_of_vehicles =
+  COMPUTE
+    MIN (
+      SUM (
+        (
+          COUNT (x) BY city_segment
+          +
+          (
+          COUNT (y) BY city_segemnt
+            +
+          COUNT (t) BY city_segment
+          )
+        )
+      )
+    )
+    EVERY 10 SECONDS
+;
+/** 4 **/
+filtered_forecasting_delay =
+  COMPUTE FORECAST[3](
+     ARITHMETIC_MEAN(bus_delay WHEN > 0, 1 HOURS)
+  ) BY stopID EVERY 1 MINUTES
+;
+/** 5 **/
+closest_taxis_car_sharing_vehicles =
+  COMPUTE vehicleID FROM( taxis, car_sharing )
+  WHEN GEOHASH[10](cusLoc) == GEOHASH[10](vehLoc)
+  EVERY 30 MINUTES
+;
+/** 6 **/
+insight = COMPUTE rackID
+WHEN temp > (RUNNING_MEAN(temp)+ ( 3 * RUNNING_SDEV(temp)))
+EVERY 5 SECONDS
+;
+/** 7 **/
+datacenter_energy_consumption_histogram =
+  COMPUTE
+     HISTOGRAM[5](
+       daily_energy_consumption)
+     BY rackID
+     EVERY 1 DAY AT 23:59 GMT
+     WITH SALIENCE 2
+;
+/** 8a **/
+cost =
+  COMPUTE (
+    PRICE_PER_KWh
+            *
+              (
+                  ARITHMETIC_MEAN(consumption, 1 HOURS ) BY datacenterID
+                  -
+                  ARITHMETIC_MEAN(generated_solar_energy, 1 HOURS ) BY datacenterID
+              )
+            ) EVERY 15 MINUTES
+;
+/** 8b **/
+query = COMPUTE
+  ARITHMETIC_MEAN(consumption, 5 MINUTES)
+  EVERY 1 MINUTES
+  WITH ALLOW WHEN dc_cost == MIN(cost)
+;
+/**9**/
+sample_energy_generation =
+  COMPUTE ARITHMETIC_MEAN(energy, 30 MINUTES) BY region EVERY 1 MINUTES
+  WITH SAMPLE 0.4
+;
+/**10**/
+sampling_computation_awareness =
+  COMPUTE  PEWMA[0.5](energy) BY region
+  EVERY 1 MINUTES
+  WITH CONFIDENCE 0.95 AND MAX_ERROR 0.05
+  AND AWARENESS ON COMPUTATIONS
+;
+/**11**/
+smoke_mean =COMPUTE
+        ARITHMETIC_MEAN(smoke) BY region
+        EVERY 1 SECONDS
+        WITH SALIENCE 5 AND ALLOW WHEN node_id IN (node_1,node_6)
+;
+/**12**/
+extreme_heart_beat =
+   COMPUTE ARITHMETIC_MEAN(heart_beat, 1 MINUTES)  BY patient
+   WHEN >= 120 EVERY 5 MINUTES
+   WITH SIGNATURE 'authority_signature'
+;
+/**13**/
+insightID =
+  COMPUTE patient_stream EVERY 5 MINUTES
+    WITH
+    ALLOW WHEN
+        ARITHMETIC_MEAN ( heart_beat, 1 MINUTES ) >= 120
+        AND  doctor_id IN (doctor_ids)
+        AND  region == doctor_region
+     ;
+/**14a**/
+prevalent_last_12_hours =
+  COMPUTE ( COUNT (disease WHEN == malaria, 12 HOURS) / COUNT(disease,12 HOURS) )
+  BY region EVERY 12 HOURS
+;
+/**14b**/
+prevalent =
+    COMPUTE
+    (
+        RUNNING_COUNT(disease WHEN == malaria)
+        /
+        RUNNING_COUNT(disease)
+    ) BY region EVERY 12 HOURS
+;
+/**14c**/
+prevalent_alert =
+    COMPUTE
+    (INSIGHT prevalent_last_12_hours - INSIGHT prevalent ) WHEN >= 0.02
+    EVERY 5 MINUTES
+;
+/**15**/
+correlation =
+   COMPUTE
+      CORRELATION ( COUNT(disease WHEN == heart_attack ),
+                    ARITHMETIC_MEAN(patient_age)
+                  )
+                  BY patient_sex EVERY 1 M
+;
+/**16**/
+mean_latency =
+  COMPUTE ARITHMETIC_MEAN(latency)
+  EVERY 5 SECONDS
+;
+  scale_out = COMPUTE INSIGHT mean_latency WHEN >= 500 EVERY 5 MINUTES
+;
+  scale_in = COMPUTE INSIGHT mean_latency WHEN< 50 EVERY 5 MINUTES
+;
+/**17**/
+scale_out =
+    COMPUTE instance_id
+    WHEN INSIGHT avg_cpu >= 80 AND INSIGHT avg_ram >= 70
+          EVERY 5 MINUTES
+;
+/**18**/
+insight = COMPUTE
+  (
+      (500 - ARITHMETIC_MEAN(latency) )
+       /
+      ( cost_provider * COUNT(instances) )
+  ) BY region
+  EVERY 5 MINUTES
+;
+/**19**/
+FUNCTION ipToCountry(ip) { ... }
+;
+FUNCTION legalCountries(movie) { ... }
+;
+new_requests = COMPUTE
+  request WHEN ipToCountry(ip) IN legalCountries(request_movie) EVERY 60 SECONDS
